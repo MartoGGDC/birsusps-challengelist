@@ -16,93 +16,44 @@ function escapeHtml(str) {
 
 /* ---------- API ---------- */
 async function fetchLevels() {
-  try {
-    const res = await fetch("/api/levels");
-    if (!res.ok) throw new Error("Failed to fetch levels");
-    levels = await res.json();
-    renderLevelsView(document.getElementById("list"), levels);
-  } catch (err) {
-    console.error(err);
-    showPopup("Failed to load levels", true);
-  }
+  const res = await fetch("/api/levels");
+  levels = await res.json();
+  renderLevelsView(document.getElementById("list"), levels);
 }
 
 async function saveLevel(level) {
-  try {
-    const payload = { ...level };
-    if (typeof level.originalRank === "undefined") {
-      payload.originalRank = level.originalRankFallback ?? level.rank;
-    }
-
-    const res = await fetch("/api/levels/update", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to save level");
-    }
-
-    await fetchLevels();
-    showPopup("Level saved");
-  } catch (err) {
-    console.error(err);
-    showPopup(err.message || "Failed to save level", true);
-  }
+  const res = await fetch("/api/levels/update", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(level),
+  });
+  if (res.ok) await fetchLevels();
 }
 
 async function deleteLevel(rank) {
-  try {
-    const res = await fetch("/api/levels/delete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ rank }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to delete level");
-    }
-    await fetchLevels();
-    showPopup("Level deleted");
-  } catch (err) {
-    console.error(err);
-    showPopup(err.message || "Failed to delete level", true);
-  }
+  const res = await fetch("/api/levels/delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ rank }),
+  });
+  if (res.ok) await fetchLevels();
 }
 
 async function createLevel() {
-  try {
-    const res = await fetch("/api/levels/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || "Failed to create level");
-    }
-    await fetchLevels();
-
-    // Auto-open modal for the newly created level
-    const newLevel = levels.find(
-      (l) => !l.title || l.title.trim() === "" || l.title === "-"
-    );
-    if (newLevel) openEditModal(newLevel);
-    else showPopup("New level created");
-  } catch (err) {
-    console.error(err);
-    showPopup(err.message || "Failed to create level", true);
-  }
+  const res = await fetch("/api/levels/create", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (res.ok) await fetchLevels();
 }
 
 /* ---------- Rendering ---------- */
@@ -158,13 +109,11 @@ function renderLevelsView(container, levelsArr) {
     }, index * 100);
 
     if (isAdmin) {
-      const editBtn = section.querySelector(".editBtn");
-      const delBtn = section.querySelector(".deleteBtn");
-      editBtn.addEventListener("click", (e) => {
+      section.querySelector(".editBtn").addEventListener("click", (e) => {
         e.stopPropagation();
         openEditModal(level);
       });
-      delBtn.addEventListener("click", (e) => {
+      section.querySelector(".deleteBtn").addEventListener("click", (e) => {
         e.stopPropagation();
         showConfirmPopup(
           `Delete level #${level.rank} - ${level.title}?`,
@@ -192,51 +141,36 @@ const cancelEdit = document.getElementById("cancelEdit");
 function openEditModal(level) {
   editingIndex = levels.findIndex((l) => l.rank === level.rank);
   document.getElementById("editRank").value = level.rank;
-  document.getElementById("editTitle").value = level.title || "";
-  document.getElementById("editCreator").value = level.creator || "";
-  const ytEl = document.getElementById("editYoutube");
-  if (ytEl) ytEl.value = level.youtube || "";
-  editModal.dataset.originalRank = String(level.rank);
+  document.getElementById("editTitle").value = level.title;
+  document.getElementById("editCreator").value = level.creator;
+  document.getElementById("editRecords").value = level.recordHolders
+    .map((r) => `${r.name}-${r.percent}-${r.verified ? "true" : "false"}`)
+    .join(",");
   editModal.classList.remove("hidden");
 }
 
-cancelEdit.addEventListener("click", () => {
-  editModal.classList.add("hidden");
-  delete editModal.dataset.originalRank;
-});
+cancelEdit.addEventListener("click", () => editModal.classList.add("hidden"));
 
 editForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-
-  const originalRank = parseInt(editModal.dataset.originalRank || "");
-  if (Number.isNaN(originalRank)) {
-    showPopup("Original rank not found", true);
-    return;
-  }
-
-  let newRank = parseInt(document.getElementById("editRank").value);
-  const title = document.getElementById("editTitle").value.trim();
-  const creator = document.getElementById("editCreator").value.trim();
-  const youtubeEl = document.getElementById("editYoutube");
-  const youtube = youtubeEl ? youtubeEl.value.trim() : "";
-
-  // Clamp the rank to valid range
-  const maxRank = levels.length;
-  if (Number.isNaN(newRank) || newRank < 1) newRank = 1;
-  if (newRank > maxRank) newRank = maxRank;
-
-  const updated = {
-    originalRank,
-    rank: newRank,
-    title,
-    creator,
-    youtube,
+  const lvl = {
+    rank: parseInt(document.getElementById("editRank").value),
+    title: document.getElementById("editTitle").value,
+    creator: document.getElementById("editCreator").value,
+    recordHolders: document
+      .getElementById("editRecords")
+      .value.split(",")
+      .map((s) => {
+        const parts = s.split("-");
+        return {
+          name: parts[0].trim(),
+          percent: parts[1]?.trim() || "0%",
+          verified: parts[2]?.trim().toLowerCase() === "true",
+        };
+      }),
   };
-
-  await saveLevel(updated);
-
   editModal.classList.add("hidden");
-  delete editModal.dataset.originalRank;
+  await saveLevel(lvl);
 });
 
 /* ---------- Login ---------- */
@@ -246,31 +180,28 @@ const cancelLogin = document.getElementById("cancelLogin");
 const confirmLogin = document.getElementById("confirmLogin");
 
 loginBtn.addEventListener("click", () => loginModal.classList.remove("hidden"));
-cancelLogin.addEventListener("click", () => loginModal.classList.add("hidden"));
-
+cancelLogin.addEventListener("click", () =>
+  loginModal.classList.add("hidden")
+);
 confirmLogin.addEventListener("click", async () => {
   const username = document.getElementById("username").value;
   const password = document.getElementById("password").value;
-  try {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    if (!res.ok) {
-      showPopup("Invalid login", true);
-      return;
-    }
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (res.ok) {
     const data = await res.json();
     token = data.token;
     localStorage.setItem("jwt", token);
     isAdmin = true;
     loginModal.classList.add("hidden");
-    showPopup("Logged in");
-    await fetchLevels();
-  } catch (err) {
-    console.error(err);
-    showPopup("Login failed", true);
+    document.getElementById("loginBtn").classList.add("hidden");
+    showPopup("✅ Logged in successfully!");
+    fetchLevels();
+  } else {
+    showPopup("❌ Invalid login.", true);
   }
 });
 
@@ -307,3 +238,9 @@ function showConfirmPopup(msg, onConfirm) {
 
 /* ---------- Init ---------- */
 fetchLevels();
+
+// Hide login button if already logged in
+if (token) {
+  isAdmin = true;
+  document.getElementById("loginBtn").classList.add("hidden");
+}
