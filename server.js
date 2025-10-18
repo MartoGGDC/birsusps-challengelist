@@ -9,7 +9,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || "mySuperSecret123!";
+const JWT_SECRET = process.env.JWT_SECRET || "ilovefootballlalala748!@";
 
 const __dirname = path.resolve();
 const LEVELS_PATH = path.join(__dirname, "levels.json");
@@ -36,8 +36,8 @@ function saveLevels(levels) {
 /* ------------------ Authentication ------------------ */
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
-  const adminUser = process.env.ADMIN_USER || "MartoGG";
-  const adminPass = process.env.ADMIN_PASS || "Ilovebirsusps";
+  const adminUser = process.env.ADMIN_USER || "birsus";
+  const adminPass = process.env.ADMIN_PASS || "birsusps is goated 2025";
 
   if (username === adminUser && password === adminPass) {
     const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "1d" });
