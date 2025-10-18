@@ -30,6 +30,7 @@ async function saveLevel(level) {
     },
     body: JSON.stringify(level),
   });
+  if (res.status === 401) return handleLogout("Session expired.");
   if (res.ok) await fetchLevels();
 }
 
@@ -42,6 +43,7 @@ async function deleteLevel(rank) {
     },
     body: JSON.stringify({ rank }),
   });
+  if (res.status === 401) return handleLogout("Session expired.");
   if (res.ok) await fetchLevels();
 }
 
@@ -53,6 +55,7 @@ async function createLevel() {
       Authorization: `Bearer ${token}`,
     },
   });
+  if (res.status === 401) return handleLogout("Session expired.");
   if (res.ok) await fetchLevels();
 }
 
@@ -143,7 +146,8 @@ function openEditModal(level) {
   document.getElementById("editRank").value = level.rank;
   document.getElementById("editTitle").value = level.title;
   document.getElementById("editCreator").value = level.creator;
-  document.getElementById("editRecords").value = level.recordHolders
+  document.getElementById("editYoutube").value = level.youtube || "";
+  document.getElementById("editRecords").value = (level.recordHolders || [])
     .map((r) => `${r.name}-${r.percent}-${r.verified ? "true" : "false"}`)
     .join(",");
   editModal.classList.remove("hidden");
@@ -157,13 +161,15 @@ editForm.addEventListener("submit", async (e) => {
     rank: parseInt(document.getElementById("editRank").value),
     title: document.getElementById("editTitle").value,
     creator: document.getElementById("editCreator").value,
+    youtube: document.getElementById("editYoutube").value,
     recordHolders: document
       .getElementById("editRecords")
       .value.split(",")
+      .filter((s) => s.trim().length > 0)
       .map((s) => {
         const parts = s.split("-");
         return {
-          name: parts[0].trim(),
+          name: parts[0]?.trim() || "",
           percent: parts[1]?.trim() || "0%",
           verified: parts[2]?.trim().toLowerCase() === "true",
         };
@@ -173,8 +179,9 @@ editForm.addEventListener("submit", async (e) => {
   await saveLevel(lvl);
 });
 
-/* ---------- Login ---------- */
+/* ---------- Login / Logout ---------- */
 const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
 const loginModal = document.getElementById("loginModal");
 const cancelLogin = document.getElementById("cancelLogin");
 const confirmLogin = document.getElementById("confirmLogin");
@@ -197,13 +204,26 @@ confirmLogin.addEventListener("click", async () => {
     localStorage.setItem("jwt", token);
     isAdmin = true;
     loginModal.classList.add("hidden");
-    document.getElementById("loginBtn").classList.add("hidden");
+    loginBtn.classList.add("hidden");
+    logoutBtn.classList.remove("hidden");
     showPopup("✅ Logged in successfully!");
     fetchLevels();
   } else {
     showPopup("❌ Invalid login.", true);
   }
 });
+
+logoutBtn.addEventListener("click", () => handleLogout("Logged out."));
+
+function handleLogout(msg) {
+  token = null;
+  isAdmin = false;
+  localStorage.removeItem("jwt");
+  loginBtn.classList.remove("hidden");
+  logoutBtn.classList.add("hidden");
+  showPopup(msg || "Logged out.");
+  fetchLevels();
+}
 
 /* ---------- Popups ---------- */
 function showPopup(msg, isError = false) {
@@ -239,8 +259,8 @@ function showConfirmPopup(msg, onConfirm) {
 /* ---------- Init ---------- */
 fetchLevels();
 
-// Hide login button if already logged in
 if (token) {
   isAdmin = true;
-  document.getElementById("loginBtn").classList.add("hidden");
+  loginBtn.classList.add("hidden");
+  logoutBtn.classList.remove("hidden");
 }
